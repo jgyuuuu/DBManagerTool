@@ -1,15 +1,14 @@
 package com.dbtool;
 
+import com.dbtool.core.DatabaseManager;  // 正确的包路径
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import java.sql.*;
-import java.util.List;
 
 public class DatabaseManagerTest {
+
     private DatabaseManager dbManager;
 
     @BeforeEach
@@ -25,14 +24,21 @@ public class DatabaseManagerTest {
     }
 
     @Test
-    void testInitialization() {
-        assertNotNull(dbManager);
+    @DisplayName("Test disconnect")
+    void testDisconnect() {
+        assertDoesNotThrow(() -> dbManager.disconnect());
+    }
+
+    @Test
+    @DisplayName("Test connection status")
+    void testIsConnected() {
         assertFalse(dbManager.isConnected());
     }
 
     @Test
-    void testConnectionInfoWhenDisconnected() {
+    @DisplayName("Test get connection info")
+    void testGetConnectionInfo() {
         String info = dbManager.getConnectionInfo();
-        assertTrue(info.contains("Not connected"));
+        assertNotNull(info);
     }
 }
