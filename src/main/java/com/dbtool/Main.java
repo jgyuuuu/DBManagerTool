@@ -10,8 +10,9 @@ import com.dbtool.util.ColorPrinter;
 import com.dbtool.util.ConfigLoader;
 import com.dbtool.util.TableFormatter;
 import com.dbtool.util.ExportUtil;
-import com.dbtool.util.PaginationUtil;
+import com.dbtool.core.PaginationUtil;
 
+import javax.swing.*;  // 添加 Swing 导入
 import java.util.Scanner;
 
 public class Main {
@@ -26,7 +27,39 @@ public class Main {
     private static boolean inPaginationMode = false;
 
     public static void main(String[] args) {
-        System.out.println("🚀 Starting Database Management Tool...");
+        // 检查启动参数
+        if (args.length > 0 && (args[0].equals("--gui") || args[0].equals("-g"))) {
+            startGUI();
+        } else if (args.length > 0 && (args[0].equals("--help") || args[0].equals("-h"))) {
+            showStartupHelp();
+        } else {
+            startCLI();
+        }
+    }
+
+    private static void startGUI() {
+        System.out.println("Launching graphical interface mode...");
+        try {
+            // 尝试加载GUI类
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    new com.dbtool.DBManagerGUI();
+                } catch (Exception e) {
+                    System.err.println("GUI startup failed: " + e.getMessage());
+                    System.out.println("Switch to command line mode...");
+                    startCLI();
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Unable to start the graphical user interface: " + e.getMessage());
+            System.out.println("Switch to command line mode...");
+            startCLI();
+        }
+    }
+
+    // 将原有的main方法内容移到startCLI方法中
+    private static void startCLI() {
+        System.out.println("Starting Database Management Tool...");
 
         initialize();
         showWelcome();
@@ -36,6 +69,17 @@ public class Main {
         System.out.println("👋 Thank you for using Database Management Tool!");
     }
 
+    private static void showStartupHelp() {
+        System.out.println("Database Management Tool User Guide:");
+        System.out.println("  java -jar DBManagerTool.jar         ");
+        System.out.println("  java -jar DBManagerTool.jar --gui   ");
+        System.out.println("  java -jar DBManagerTool.jar --help  ");
+        System.out.println();
+        System.out.println("or use the classpath approach:");
+        System.out.println("  java -cp \"DBManagerTool.jar;lib/*\" com.dbtool.Main --gui");
+    }
+
+    // 原有的initialize方法保持不变
     private static void initialize() {
         ConfigLoader.printConfig();
         dbManager = new DatabaseManager();
@@ -55,7 +99,6 @@ public class Main {
         System.out.println("\n" +
                 "╔══════════════════════════════════════════════╗\n" +
                 "║           DATABASE MANAGEMENT TOOL           ║\n" +
-                "║                   Day 4 ✅                   ║\n" +
                 "╚══════════════════════════════════════════════╝\n");
 
         System.out.println(dbManager.getConnectionInfo());
@@ -97,7 +140,7 @@ public class Main {
                 break;
 
             case HELP:
-                showHelp();
+                showCommandHelp();  // 修改为新的方法名
                 break;
 
             case STATUS:
@@ -170,23 +213,65 @@ public class Main {
     }
 
     private static void executeSQL(String sql) {
-        ColorPrinter.printSQL(sql);
-        QueryResult result = sqlExecutor.execute(dbManager.getConnection(), sql);
+    ColorPrinter.printSQL(sql);
+    QueryResult result = sqlExecutor.execute(dbManager.getConnection(), sql);
 
-        if (result.isSuccess() && result.isQueryResult() && result.getData() != null) {
-            lastQueryResult = result;
+    if (result.isSuccess() && result.isQueryResult() && result.getData() != null) {
+        lastQueryResult = result;
 
-            if (result.getData().size() > PAGE_SIZE) {
-                inPaginationMode = true;
-                currentPage = 1;
-                ColorPrinter.printInfo("Large result set. Entering pagination mode.");
-                PaginationUtil.displayPaginatedResult(result, currentPage, PAGE_SIZE);
-            } else {
-                TableFormatter.displayResult(result);
-            }
+        // 分页功能
+        if (result.getData().size() > PAGE_SIZE) {
+            inPaginationMode = true;
+            currentPage = 1;
+            ColorPrinter.printInfo("Large result set. Entering pagination mode.");
+            PaginationUtil.displayPaginatedResult(result, currentPage, PAGE_SIZE);
         } else {
             TableFormatter.displayResult(result);
         }
+    } else {
+        TableFormatter.displayResult(result);
+    }
+}
+
+
+    private static void handlePaginationInput(String input) {
+        // 暂时禁用分页模式
+        inPaginationMode = false;
+        currentPage = 1;
+        ColorPrinter.printInfo("Pagination mode disabled in current version");
+
+        String lowerInput = input.trim().toLowerCase();
+
+        switch (lowerInput) {
+            case "p":
+                if (currentPage > 1) {
+                    currentPage--;
+                }
+                break;
+
+            case "n":
+                currentPage++;
+                break;
+
+            case "q":
+                inPaginationMode = false;
+                currentPage = 1;
+                return;
+
+            default:
+                try {
+                    int page = Integer.parseInt(input);
+                    if (page >= 1) {
+                        currentPage = page;
+                    }
+                } catch (NumberFormatException e) {
+                    ColorPrinter.printError("Invalid page command. Use P, N, Q, or page number.");
+                    return;
+                }
+        }
+
+        PaginationUtil.displayPaginatedResult(lastQueryResult, currentPage, PAGE_SIZE);
+
     }
 
     private static void listDatabases() {
@@ -269,44 +354,13 @@ public class Main {
         ExportUtil.exportToText(lastQueryResult, filename);
     }
 
-    private static void handlePaginationInput(String input) {
-        String lowerInput = input.trim().toLowerCase();
 
-        switch (lowerInput) {
-            case "p":
-                if (currentPage > 1) {
-                    currentPage--;
-                }
-                break;
 
-            case "n":
-                currentPage++;
-                break;
-
-            case "q":
-                inPaginationMode = false;
-                currentPage = 1;
-                return;
-
-            default:
-                try {
-                    int page = Integer.parseInt(input);
-                    if (page >= 1) {
-                        currentPage = page;
-                    }
-                } catch (NumberFormatException e) {
-                    ColorPrinter.printError("Invalid page command. Use P, N, Q, or page number.");
-                    return;
-                }
-        }
-
-        PaginationUtil.displayPaginatedResult(lastQueryResult, currentPage, PAGE_SIZE);
-    }
-
-    private static void showHelp() {
+    // 重命名方法，避免重复
+    private static void showCommandHelp() {
         ColorPrinter.printHeader("Available Commands");
 
-        System.out.println("\n📋 META COMMANDS (start with \\):");
+        System.out.println("\nMETA COMMANDS (start with \\):");
         System.out.println("  \\l or \\list              - List all databases");
         System.out.println("  \\t or \\tables            - List tables in current database");
         System.out.println("  \\t <db> or \\tables <db>  - List tables in specific database");
@@ -321,20 +375,20 @@ public class Main {
         System.out.println("  \\export_txt <file>       - Export last result to text");
         System.out.println("  \\help                    - Show this help");
 
-        System.out.println("\n💡 BUILT-IN COMMANDS:");
+        System.out.println("\nBUILT-IN COMMANDS:");
         System.out.println("  help                     - Show help");
         System.out.println("  status                   - Show connection status");
         System.out.println("  test                     - Test database connection");
         System.out.println("  config                   - Show configuration");
         System.out.println("  exit                     - Exit the program");
 
-        System.out.println("\n📄 PAGINATION COMMANDS:");
+        System.out.println("\nPAGINATION COMMANDS:");
         System.out.println("  P                        - Previous page");
         System.out.println("  N                        - Next page");
         System.out.println("  Q                        - Quit paging mode");
         System.out.println("  <number>                 - Go to specific page");
 
-        System.out.println("\n🔧 SQL COMMANDS:");
+        System.out.println("\nSQL COMMANDS:");
         System.out.println("  Any SQL statement        - Execute SQL commands");
         System.out.println("  Examples:");
         System.out.println("    SELECT * FROM table;");
@@ -347,13 +401,13 @@ public class Main {
 
     private static void showStatus() {
         ColorPrinter.printHeader("Application Status");
-        System.out.println("  Database: " + (dbManager.isConnected() ? "✅ Connected" : "❌ Disconnected"));
+        System.out.println("  Database: " + (dbManager.isConnected() ? "Connected" : "Disconnected"));
         System.out.println("  " + dbManager.getConnectionInfo());
 
         if (dbManager.testConnection()) {
-            System.out.println("  Connection test: ✅ Valid");
+            System.out.println("  Connection test: Valid");
         } else {
-            System.out.println("  Connection test: ❌ Invalid");
+            System.out.println("  Connection test: Invalid");
         }
     }
 

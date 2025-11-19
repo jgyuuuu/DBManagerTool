@@ -47,12 +47,12 @@ public class ExportUtil {
                 writer.println(csvLine);
             }
 
-            System.out.println("✅ Data exported to: " + filename);
-            System.out.println("📊 " + data.size() + " rows exported");
+            System.out.println("Data exported to: " + filename);
+            System.out.println(data.size() + " rows exported");
             return true;
 
         } catch (IOException e) {
-            System.err.println("❌ Export failed: " + e.getMessage());
+            System.err.println("Export failed: " + e.getMessage());
             return false;
         }
     }
@@ -97,12 +97,12 @@ public class ExportUtil {
 
             writer.println(createTextTableLine(columnWidths));
 
-            System.out.println("✅ Data exported to: " + filename);
-            System.out.println("📊 " + data.size() + " rows exported");
+            System.out.println("Data exported to: " + filename);
+            System.out.println(data.size() + " rows exported");
             return true;
 
         } catch (IOException e) {
-            System.err.println("❌ Export failed: " + e.getMessage());
+            System.err.println("Export failed: " + e.getMessage());
             return false;
         }
     }

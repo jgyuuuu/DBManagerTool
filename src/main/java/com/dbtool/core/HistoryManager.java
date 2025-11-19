@@ -1,121 +1,84 @@
 package com.dbtool.core;
 
-import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 
 public class HistoryManager {
-    private static final int MAX_HISTORY_SIZE = 100;
-    private static final String HISTORY_FILE = ".dbmanager_history";
-    private LinkedList<String> history;
-    private int currentIndex;
+    private final List<String> history = new ArrayList<>();
+    private final int maxSize;
 
     public HistoryManager() {
-        this.history = new LinkedList<>();
-        this.currentIndex = -1;
-        loadHistory();
+        this(100); // Default: keep 100 records
     }
 
-    public void addToHistory(String command) {
-        if (command == null || command.trim().isEmpty()) {
-            return;
-        }
-
-        String trimmed = command.trim();
-
-        // 移除重复的历史记录
-        history.remove(trimmed);
-
-        // 添加到开头
-        history.addFirst(trimmed);
-
-        // 限制历史记录大小
-        if (history.size() > MAX_HISTORY_SIZE) {
-            history.removeLast();
-        }
-
-        currentIndex = -1;
-        saveHistory();
+    public HistoryManager(int maxSize) {
+        this.maxSize = Math.max(10, maxSize); // Keep at least 10 records
     }
 
-    public String getPrevious() {
-        if (history.isEmpty()) {
-            return null;
-        }
+    public void add(String item) {
+        if (item != null && !item.trim().isEmpty()) {
+            String trimmedItem = item.trim();
 
-        if (currentIndex < history.size() - 1) {
-            currentIndex++;
-        }
+            // Avoid adding duplicate adjacent records
+            if (!history.isEmpty() && history.get(history.size() - 1).equals(trimmedItem)) {
+                return;
+            }
 
-        return history.get(currentIndex);
-    }
+            // Remove existing identical records to avoid duplicates
+            history.remove(trimmedItem);
 
-    public String getNext() {
-        if (history.isEmpty() || currentIndex < 0) {
-            return null;
-        }
+            history.add(trimmedItem);
 
-        if (currentIndex > 0) {
-            currentIndex--;
-            return history.get(currentIndex);
-        } else {
-            currentIndex = -1;
-            return "";
+            // Limit history size
+            while (history.size() > maxSize) {
+                history.remove(0); // Remove oldest record
+            }
         }
     }
 
-    public List<String> getHistory(int count) {
-        if (count <= 0 || count > history.size()) {
-            count = history.size();
-        }
-
-        return new ArrayList<>(history.subList(0, count));
+    public List<String> getAll() {
+        List<String> result = new ArrayList<>(history);
+        Collections.reverse(result); // Show newest records first
+        return result;
     }
 
-    public void clearHistory() {
+    public List<String> getRecent(int count) {
+        int actualCount = Math.min(count, history.size());
+        List<String> result = new ArrayList<>();
+
+        for (int i = history.size() - 1; i >= history.size() - actualCount; i--) {
+            result.add(history.get(i));
+        }
+
+        return result;
+    }
+
+    public List<String> search(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAll();
+        }
+
+        String searchTerm = keyword.toLowerCase().trim();
+        return history.stream()
+                .filter(item -> item.toLowerCase().contains(searchTerm))
+                .sorted((a, b) -> Integer.compare(
+                        history.indexOf(b), history.indexOf(a))) // Sort by time descending
+                .collect(Collectors.toList());
+    }
+
+    public void clear() {
         history.clear();
-        currentIndex = -1;
-        saveHistory();
     }
 
-    public void showHistory(int count) {
-        List<String> recentHistory = getHistory(count);
-
-        if (recentHistory.isEmpty()) {
-            System.out.println("No command history found.");
-            return;
-        }
-
-        System.out.println("Command History (latest " + recentHistory.size() + " commands):");
-        for (int i = 0; i < recentHistory.size(); i++) {
-            System.out.printf("%3d: %s%n", i + 1, recentHistory.get(i));
-        }
+    public int size() {
+        return history.size();
     }
 
-    private void loadHistory() {
-        File historyFile = new File(HISTORY_FILE);
-        if (!historyFile.exists()) {
-            return;
-        }
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(historyFile))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.trim().isEmpty()) {
-                    history.add(line);
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Failed to load command history: " + e.getMessage());
-        }
+    public boolean isEmpty() {
+        return history.isEmpty();
     }
 
-    private void saveHistory() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(HISTORY_FILE))) {
-            for (String command : history) {
-                writer.println(command);
-            }
-        } catch (IOException e) {
-            System.err.println("Failed to save command history: " + e.getMessage());
-        }
-    }
 }

@@ -1,6 +1,7 @@
-package com.dbtool.util;
+package com.dbtool.core;
 
 import com.dbtool.model.QueryResult;
+import com.dbtool.util.TableFormatter;
 
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,7 @@ public class PaginationUtil {
 
     public static void displayPaginatedResult(QueryResult result, int page, int pageSize) {
         if (!result.isSuccess()) {
-            System.err.println("❌ " + result.getMessage());
+            System.err.println(result.getMessage());
             return;
         }
 
@@ -24,7 +25,7 @@ public class PaginationUtil {
         List<String> columnNames = result.getColumnNames();
 
         if (data == null || data.isEmpty()) {
-            System.out.println("ℹ️  No data found.");
+            System.out.println("No data found.");
             return;
         }
 
@@ -59,7 +60,7 @@ public class PaginationUtil {
 
         // 显示分页信息
         if (totalPages > 1) {
-            System.out.println("\n📄 Navigation: ");
+            System.out.println("\nNavigation: ");
             if (page > 1) {
                 System.out.print("  [P]revious page  ");
             }

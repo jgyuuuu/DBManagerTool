@@ -15,15 +15,22 @@ public class SQLExecutor {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 去除SQL前后的空格并转换为小写用于判断
             String trimmedSQL = sql.trim();
-            String lowerSQL = trimmedSQL.toLowerCase();
 
-            // 判断SQL类型
-            if (isQuerySQL(lowerSQL)) {
-                return executeQuery(connection, trimmedSQL, startTime);
-            } else {
-                return executeUpdate(connection, trimmedSQL, startTime);
+            // 使用通用执行方法处理不确定的语句
+            try (Statement stmt = connection.createStatement()) {
+                boolean hasResultSet = stmt.execute(trimmedSQL);
+
+                if (hasResultSet) {
+                    try (ResultSet rs = stmt.getResultSet()) {
+                        return handleQueryResult(rs, startTime);
+                    }
+                } else {
+                    int affectedRows = stmt.getUpdateCount();
+                    long endTime = System.currentTimeMillis();
+                    String message = String.format("Command completed successfully (%d ms)", (endTime - startTime));
+                    return QueryResult.updateSuccess(message, affectedRows, (endTime - startTime));
+                }
             }
 
         } catch (SQLException e) {
@@ -36,11 +43,56 @@ public class SQLExecutor {
     }
 
     private boolean isQuerySQL(String sql) {
-        return sql.startsWith("select") ||
-                sql.startsWith("show") ||
-                sql.startsWith("describe") ||
-                sql.startsWith("explain") ||
-                sql.startsWith("with");
+        if (sql == null || sql.trim().isEmpty()) {
+            return false;
+        }
+
+        String cleanSql = sql.trim().toLowerCase();
+
+        // 明确返回结果集的语句
+        if (cleanSql.startsWith("select") ||
+                cleanSql.startsWith("show") ||
+                cleanSql.startsWith("describe") ||
+                cleanSql.startsWith("desc") ||
+                cleanSql.startsWith("explain") ||
+                cleanSql.startsWith("with") ||
+                cleanSql.startsWith("call")) {
+            return true;
+        }
+
+        // 表维护命令，也返回结果集
+        if (cleanSql.startsWith("check") ||
+                cleanSql.startsWith("analyze") ||
+                cleanSql.startsWith("optimize") ||
+                cleanSql.startsWith("repair")) {
+            return true;
+        }
+
+        // 明确不返回结果集的语句
+        if (cleanSql.startsWith("insert") ||
+                cleanSql.startsWith("update") ||
+                cleanSql.startsWith("delete") ||
+                cleanSql.startsWith("create") ||
+                cleanSql.startsWith("alter") ||
+                cleanSql.startsWith("drop") ||
+                cleanSql.startsWith("truncate") ||
+                cleanSql.startsWith("grant") ||
+                cleanSql.startsWith("revoke") ||
+                cleanSql.startsWith("commit") ||
+                cleanSql.startsWith("rollback") ||
+                cleanSql.startsWith("start transaction") ||
+                cleanSql.startsWith("begin")) {
+            return false;
+        }
+
+        // 对于不确定的语句，使用通用执行方法
+        return tryUniversalExecute(sql);
+    }
+
+    private boolean tryUniversalExecute(String sql) {
+        // 对于不确定的语句，使用 execute() 而不是 executeQuery() 或 executeUpdate()
+        // 这样可以让数据库驱动自己决定语句类型
+        return true; // 先当作查询处理，如果失败会由错误处理机制捕获
     }
 
     private QueryResult executeQuery(Connection connection, String sql, long startTime) throws SQLException {

@@ -9,7 +9,7 @@ public class TableFormatter {
 
     public static void displayResult(QueryResult result) {
         if (!result.isSuccess()) {
-            System.err.println("❌ " + result.getMessage());
+            System.err.println(result.getMessage());
             return;
         }
 
@@ -25,8 +25,8 @@ public class TableFormatter {
         List<String> columnNames = result.getColumnNames();
 
         if (data == null || data.isEmpty()) {
-            System.out.println("ℹ️  No data found.");
-            System.out.println("⏱️  " + result.getMessage());
+            System.out.println("No data found.");
+            System.out.println(result.getMessage());
             return;
         }
 
@@ -38,13 +38,13 @@ public class TableFormatter {
         printDataRows(data, columnNames, columnWidths);
         printHorizontalLine(columnWidths);
 
-        System.out.println("📊 " + result.getRowCount() + " row(s) returned");
-        System.out.println("⏱️  " + result.getMessage());
+        System.out.println(result.getRowCount() + " row(s) returned");
+        System.out.println(result.getMessage());
     }
 
     private static void displayUpdateResult(QueryResult result) {
-        System.out.println("✅ " + result.getMessage());
-        System.out.println("📝 " + result.getRowCount() + " row(s) affected");
+        System.out.println(result.getMessage());
+        System.out.println(result.getRowCount() + " row(s) affected");
     }
 
     private static int[] calculateColumnWidths(List<Map<String, Object>> data, List<String> columnNames) {
