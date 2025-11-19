@@ -69,6 +69,21 @@ public class HistoryManager {
                 .collect(Collectors.toList());
     }
 
+    public void addToHistory(String item) {
+        add(item);
+    }
+
+    public void showHistory(int count) {
+        List<String> recent = getRecent(count);
+        for (int i = 0; i < recent.size(); i++) {
+            System.out.println((i + 1) + ". " + recent.get(i));
+        }
+    }
+
+    public void clearHistory() {
+        clear();
+    }
+
     public void clear() {
         history.clear();
     }
