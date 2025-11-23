@@ -68,11 +68,6 @@ public class CommandParser {
                 return new CommandResult(CommandType.CLEAR_HISTORY, argument);
 
             case "export":
-                if (argument.isEmpty()) {
-                    return new CommandResult(CommandType.ERROR, "Filename required for export command");
-                }
-                return new CommandResult(CommandType.EXPORT_CSV, argument);
-
             case "export_csv":
                 if (argument.isEmpty()) {
                     return new CommandResult(CommandType.ERROR, "Filename required for export command");
@@ -84,6 +79,18 @@ public class CommandParser {
                     return new CommandResult(CommandType.ERROR, "Filename required for export command");
                 }
                 return new CommandResult(CommandType.EXPORT_TEXT, argument);
+
+            case "\\get_tables":
+                return new CommandResult(CommandType.GET_TABLES, argument);
+
+            case "\\validate":
+                return new CommandResult(CommandType.VALIDATE_SQL, argument);
+
+            case "\\prepared":
+                return new CommandResult(CommandType.PREPARED_QUERY, argument);
+
+            case "\\batch":
+                return new CommandResult(CommandType.BATCH_EXECUTE, argument);
 
             default:
                 return new CommandResult(CommandType.ERROR, "Unknown meta command: " + command);
@@ -108,6 +115,17 @@ public class CommandParser {
             case "config":
                 return CommandType.SHOW_CONFIG;
 
+            case "get_tables":
+                return CommandType.GET_TABLES;
+
+            case "validate":
+                return CommandType.VALIDATE_SQL;
+
+            case "prepared":
+                return CommandType.PREPARED_QUERY;
+
+            case "batch":
+                return CommandType.BATCH_EXECUTE;
 
             default:
                 return CommandType.UNKNOWN;
@@ -142,6 +160,10 @@ public class CommandParser {
         EXIT,
         EMPTY,
         ERROR,
+        GET_TABLES,
+        VALIDATE_SQL,
+        PREPARED_QUERY,
+        BATCH_EXECUTE,
         HISTORY,           // 显示历史记录
         CLEAR_HISTORY,     // 清除历史记录
         EXPORT_CSV,        // 导出为CSV

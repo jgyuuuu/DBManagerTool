@@ -1,30 +1,27 @@
-# Database Management Tool
+Database Management Tool
 
 一个基于Java和JDBC的数据库管理工具，专为数据库管理员设计。
 
-## 功能特性
+!功能特性
 
-- 🔌 **多数据库支持** - 支持MySQL、PostgreSQL等
-- 📊 **SQL执行** - 执行任意SQL语句
-- 🔍 **元数据浏览** - 查看数据库结构信息
-- 🎨 **美观输出** - 格式化的表格显示
-- 📝 **命令历史** - 自动保存执行历史
-- 📄 **分页显示** - 大数据集分页浏览
-- 💾 **数据导出** - 支持CSV和文本格式
-- 🎯 **智能提示** - 命令自动补全
+- 多数据库支持 - 支持MySQL、PostgreSQL等
+- SQL执行 - 执行任意SQL语句
+- 元数据浏览 - 查看数据库结构信息
+- 命令历史 - 自动保存执行历史
+- 分页显示 - 大数据集分页浏览
+- 数据导出 - 支持CSV和文本格式
+- 智能提示 - 命令自动补全
 
-## 快速开始
 
-### 环境要求
+!环境要求
 - Java 8+
 - MySQL 5.7+ 或其他支持JDBC的数据库
 
-### 安装运行
+!安装运行
 1. 克隆项目
 2. 配置 `src/main/resources/database.properties`
 3. 运行: `mvn exec:java -Dexec.mainClass="com.dbtool.Main"`
 
-### 打包部署
-```bash
+!打包部署
 mvn clean package
 java -jar target/DBManagerTool-1.0-SNAPSHOT-jar-with-dependencies.jar

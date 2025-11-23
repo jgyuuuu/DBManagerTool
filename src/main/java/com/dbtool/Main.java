@@ -14,6 +14,8 @@ import com.dbtool.core.PaginationUtil;
 
 import javax.swing.*;  // 添加 Swing 导入
 import java.util.Scanner;
+import java.util.List;
+import java.util.ArrayList;
 
 public class Main {
     private static DatabaseManager dbManager;
@@ -140,7 +142,7 @@ public class Main {
                 break;
 
             case HELP:
-                showCommandHelp();  // 修改为新的方法名
+                showCommandHelp();
                 break;
 
             case STATUS:
@@ -195,6 +197,23 @@ public class Main {
                 exportToText(command.getContent());
                 break;
 
+            // 新增的命令类型
+            case GET_TABLES:
+                getTablesViaExecutor();
+                break;
+
+            case VALIDATE_SQL:
+                validateSQL();
+                break;
+
+            case PREPARED_QUERY:
+                executePreparedQuery();
+                break;
+
+            case BATCH_EXECUTE:
+                executeBatchSQL();
+                break;
+
             case SQL:
                 executeSQL(command.getContent());
                 break;
@@ -213,26 +232,25 @@ public class Main {
     }
 
     private static void executeSQL(String sql) {
-    ColorPrinter.printSQL(sql);
-    QueryResult result = sqlExecutor.execute(dbManager.getConnection(), sql);
+        ColorPrinter.printSQL(sql);
+        QueryResult result = sqlExecutor.execute(dbManager.getConnection(), sql);
 
-    if (result.isSuccess() && result.isQueryResult() && result.getData() != null) {
-        lastQueryResult = result;
+        if (result.isSuccess() && result.isQueryResult() && result.getData() != null) {
+            lastQueryResult = result;
 
-        // 分页功能
-        if (result.getData().size() > PAGE_SIZE) {
-            inPaginationMode = true;
-            currentPage = 1;
-            ColorPrinter.printInfo("Large result set. Entering pagination mode.");
-            PaginationUtil.displayPaginatedResult(result, currentPage, PAGE_SIZE);
+            // 分页功能
+            if (result.getData().size() > PAGE_SIZE) {
+                inPaginationMode = true;
+                currentPage = 1;
+                ColorPrinter.printInfo("Large result set. Entering pagination mode.");
+                PaginationUtil.displayPaginatedResult(result, currentPage, PAGE_SIZE);
+            } else {
+                TableFormatter.displayResult(result);
+            }
         } else {
             TableFormatter.displayResult(result);
         }
-    } else {
-        TableFormatter.displayResult(result);
     }
-}
-
 
     private static void handlePaginationInput(String input) {
         // 暂时禁用分页模式
@@ -271,7 +289,6 @@ public class Main {
         }
 
         PaginationUtil.displayPaginatedResult(lastQueryResult, currentPage, PAGE_SIZE);
-
     }
 
     private static void listDatabases() {
@@ -354,7 +371,109 @@ public class Main {
         ExportUtil.exportToText(lastQueryResult, filename);
     }
 
+    // ========== 新增的方法：实际使用 SQLExecutor 的新功能 ==========
 
+    /**
+     * 使用 SQLExecutor 的 getTables 方法获取表列表
+     */
+    private static void getTablesViaExecutor() {
+        ColorPrinter.printHeader("Getting Tables via SQLExecutor");
+        QueryResult result = sqlExecutor.getTables(dbManager.getConnection());
+        TableFormatter.displayResult(result);
+    }
+
+    /**
+     * 使用 SQLExecutor 的 validateSQL 方法验证 SQL 语法
+     */
+    private static void validateSQL() {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter SQL to validate: ");
+        String sql = scanner.nextLine().trim();
+
+        if (!sql.isEmpty()) {
+            ColorPrinter.printInfo("Validating SQL: " + sql);
+            QueryResult result = sqlExecutor.validateSQL(dbManager.getConnection(), sql);
+            ColorPrinter.printSuccess(result.getMessage());
+        } else {
+            ColorPrinter.printError("No SQL provided for validation");
+        }
+    }
+
+    /**
+     * 使用 SQLExecutor 的 executePrepared 方法执行参数化查询
+     */
+    private static void executePreparedQuery() {
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.println("=== Parameterized Query Demo ===");
+        System.out.println("Example: SELECT * FROM users WHERE age > ? AND name LIKE ?");
+
+        try {
+            List<Object> params = new ArrayList<>();
+
+            System.out.print("Enter minimum age: ");
+            String ageInput = scanner.nextLine().trim();
+            if (!ageInput.isEmpty()) {
+                params.add(Integer.parseInt(ageInput));
+            }
+
+            System.out.print("Enter name pattern (e.g., %John%): ");
+            String nameInput = scanner.nextLine().trim();
+            if (!nameInput.isEmpty()) {
+                params.add(nameInput);
+            }
+
+            // 根据参数数量构建SQL
+            String sql;
+            if (params.size() == 2) {
+                sql = "SELECT * FROM users WHERE age > ? AND name LIKE ?";
+            } else if (params.size() == 1) {
+                if (ageInput.isEmpty()) {
+                    sql = "SELECT * FROM users WHERE name LIKE ?";
+                } else {
+                    sql = "SELECT * FROM users WHERE age > ?";
+                }
+            } else {
+                sql = "SELECT * FROM users LIMIT 10";
+            }
+
+            ColorPrinter.printSQL("Executing: " + sql);
+            QueryResult result = sqlExecutor.executePrepared(dbManager.getConnection(), sql, params);
+            TableFormatter.displayResult(result);
+
+        } catch (Exception e) {
+            ColorPrinter.printError("Error in prepared query: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 使用 SQLExecutor 的 executeMultiple 方法执行批量 SQL
+     */
+    private static void executeBatchSQL() {
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.println("=== Batch SQL Execution ===");
+        System.out.println("Enter multiple SQL statements separated by semicolons:");
+        System.out.println("Example: SHOW TABLES; SELECT NOW(); SELECT 1 + 1;");
+
+        String batchInput = scanner.nextLine().trim();
+
+        if (!batchInput.isEmpty()) {
+            ColorPrinter.printInfo("Executing batch SQL...");
+            List<QueryResult> results = sqlExecutor.executeMultiple(dbManager.getConnection(), batchInput);
+
+            System.out.println("\n=== Batch Execution Results ===");
+            for (int i = 0; i < results.size(); i++) {
+                QueryResult result = results.get(i);
+                System.out.println("Statement " + (i + 1) + ": " + result.getMessage());
+                if (result.isSuccess() && result.getData() != null && !result.getData().isEmpty()) {
+                    TableFormatter.displayResult(result);
+                }
+            }
+        } else {
+            ColorPrinter.printError("No SQL provided for batch execution");
+        }
+    }
 
     // 重命名方法，避免重复
     private static void showCommandHelp() {
@@ -373,6 +492,12 @@ public class Main {
         System.out.println("  \\export <file>           - Export last result to CSV");
         System.out.println("  \\export_csv <file>       - Export last result to CSV");
         System.out.println("  \\export_txt <file>       - Export last result to text");
+
+        // 新增的命令
+        System.out.println("  \\get_tables              - Get tables via SQLExecutor");
+        System.out.println("  \\validate                - Validate SQL syntax");
+        System.out.println("  \\prepared                - Execute parameterized query");
+        System.out.println("  \\batch                   - Execute batch SQL statements");
         System.out.println("  \\help                    - Show this help");
 
         System.out.println("\nBUILT-IN COMMANDS:");

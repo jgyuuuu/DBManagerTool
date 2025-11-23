@@ -48,16 +48,6 @@ public class MetadataManager {
         }
     }
 
-    public QueryResult getTableInfo(String tableName) {
-        try {
-            DatabaseMetaData metaData = connection.getMetaData();
-            ResultSet columns = metaData.getColumns(null, null, tableName, "%");
-            return resultSetToQueryResult(columns, "Columns in " + tableName);
-        } catch (SQLException e) {
-            return QueryResult.error("Failed to get table info: " + e.getMessage());
-        }
-    }
-
     public QueryResult getTableStatus() {
         try {
             String sql = "SHOW TABLE STATUS";

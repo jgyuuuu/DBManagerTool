@@ -9,17 +9,19 @@ import com.dbtool.util.TableFormatter;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 public class DBManagerGUI extends JFrame {
     private DatabaseManager dbManager;
     private SQLExecutor sqlExecutor;
     private MetadataManager metadataManager;
-    private HistoryManager historyManager;
-
+    private HistoryManager sqlHistoryManager;
 
     // UI components
     private JTextArea outputArea;
@@ -47,7 +49,8 @@ public class DBManagerGUI extends JFrame {
 
             sqlExecutor = new SQLExecutor();
             metadataManager = new MetadataManager(dbManager.getConnection());
-            historyManager = new HistoryManager();
+            sqlHistoryManager = new HistoryManager(50);
+
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "Initialization failed: " + e.getMessage(),
@@ -78,6 +81,7 @@ public class DBManagerGUI extends JFrame {
         // Result table
         tableModel = new DefaultTableModel();
         JTable resultTable = new JTable(tableModel);
+        resultTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         JScrollPane tableScroll = new JScrollPane(resultTable);
 
         // Input panel
@@ -88,6 +92,7 @@ public class DBManagerGUI extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         executeButton = new JButton("Execute (Enter)");
         clearButton = new JButton("Clear");
+
         buttonPanel.add(executeButton);
         buttonPanel.add(clearButton);
 
@@ -105,7 +110,7 @@ public class DBManagerGUI extends JFrame {
 
         mainPanel.add(splitPane, BorderLayout.CENTER);
         mainPanel.add(inputPanel, BorderLayout.SOUTH);
-        mainPanel.add(createToolbar(), BorderLayout.NORTH);
+        mainPanel.add(createToolbar(), BorderLayout.WEST);
 
         add(mainPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
@@ -116,37 +121,36 @@ public class DBManagerGUI extends JFrame {
         setVisible(true);
         appendOutput("Database Management Tool - GUI Started\n");
         appendOutput("Database connected successfully\n");
-        appendOutput("Tip: Enter SQL commands or use toolbar shortcuts\n");
+        appendOutput("Tip: Use toolbar buttons for quick actions\n");
     }
 
     private JToolBar createToolbar() {
-    JToolBar toolbar = new JToolBar();
-    toolbar.setFloatable(false);
+        JToolBar toolbar = new JToolBar();
+        toolbar.setFloatable(false);
+        toolbar.setOrientation(JToolBar.VERTICAL);
 
-    String[] commands = {
-            "Show Databases", "SHOW DATABASES",
-            "Show Tables", "SHOW TABLES",
-            "Describe Table", "DESCRIBE_TABLE",
-            "Database Info", "DATABASE_INFO",
-            "Table Status", "TABLE_STATUS",
-            "Show History", "SHOW_HISTORY",
-            "Show Recent", "SHOW_RECENT",
-            "Search History", "SEARCH_HISTORY",
-            "Clear History", "CLEAR_HISTORY",
-            "Status", "STATUS",
-            "Test Connection", "TEST"
-    };
+        ToolbarCommand[] commands = {
+                new ToolbarCommand("Show Databases", "SHOW_DATABASES"),
+                new ToolbarCommand("Show Tables", "SHOW_TABLES"),
+                new ToolbarCommand("Describe Table", "DESCRIBE_TABLE"),
+                new ToolbarCommand("Database Info", "DATABASE_INFO"),
+                new ToolbarCommand("Table Status", "TABLE_STATUS"),
+                new ToolbarCommand("Connection Status", "STATUS"),
+                new ToolbarCommand("Test Connection", "TEST_CONNECTION"),
+                new ToolbarCommand("Get Tables", "GET_TABLES"),
+                new ToolbarCommand("Validate SQL", "VALIDATE_SQL"),
+                new ToolbarCommand("Prepared Query", "PREPARED_QUERY"),
+                new ToolbarCommand("Batch Execute", "BATCH_EXECUTE")
+        };
 
-    for (int i = 0; i < commands.length; i += 2) {
-        JButton button = new JButton(commands[i]);
-        final String command = commands[i + 1];
-        button.addActionListener(e -> executeCommand(command));
-        toolbar.add(button);
+        for (ToolbarCommand cmd : commands) {
+            JButton button = new JButton(cmd.getDisplayName());
+            button.addActionListener(e -> executeToolbarCommand(cmd.getCommand()));
+            toolbar.add(button);
+        }
+
+        return toolbar;
     }
-
-    return toolbar;
-}
-
 
     private void setupEventHandlers() {
         executeButton.addActionListener(this::executeCurrentCommand);
@@ -156,142 +160,260 @@ public class DBManagerGUI extends JFrame {
             tableModel.setColumnCount(0);
             statusLabel.setText("Cleared");
         });
+
         inputField.addActionListener(this::executeCurrentCommand);
     }
 
     private void executeCurrentCommand(ActionEvent e) {
         String command = inputField.getText().trim();
         if (!command.isEmpty()) {
-            executeCommand(command);
+            executeSQLCommand(command);
             inputField.setText("");
         }
     }
 
+    private void executeToolbarCommand(String command) {
+        appendOutput("> [Toolbar] " + command + "\n");
+        executeCommand(command);
+    }
+
+    private void executeSQLCommand(String sql) {
+        appendOutput("> " + sql + "\n");
+
+        // 添加到历史记录
+        sqlHistoryManager.add(sql);
+
+        executeCommand(sql);
+    }
+
     private void executeCommand(String command) {
-    if (!command.equalsIgnoreCase("SHOW_HISTORY") &&
-        !command.equalsIgnoreCase("CLEAR_HISTORY")) {
-        historyManager.add(command);
+        try {
+            if (command.equalsIgnoreCase("STATUS")) {
+                handleStatusCommand();
+            } else if (command.equalsIgnoreCase("TEST_CONNECTION")) {
+                handleTestConnection();
+            } else if (command.equalsIgnoreCase("SHOW_DATABASES")) {
+                handleShowDatabases();
+            } else if (command.equalsIgnoreCase("SHOW_TABLES")) {
+                handleShowTables();
+            } else if (command.equalsIgnoreCase("DESCRIBE_TABLE")) {
+                handleDescribeTable();
+            } else if (command.equalsIgnoreCase("DATABASE_INFO")) {
+                handleDatabaseInfo();
+            } else if (command.equalsIgnoreCase("TABLE_STATUS")) {
+                handleTableStatus();
+            } else if (command.equalsIgnoreCase("GET_TABLES")) {
+                handleGetTables();
+            } else if (command.equalsIgnoreCase("VALIDATE_SQL")) {
+                handleValidateSQL();
+            } else if (command.equalsIgnoreCase("PREPARED_QUERY")) {
+                handlePreparedQuery();
+            } else if (command.equalsIgnoreCase("BATCH_EXECUTE")) {
+                handleBatchExecute();
+            } else {
+                // 执行SQL命令
+                handleSQLExecution(command);
+            }
+        } catch (Exception e) {
+            appendOutput("Error: " + e.getMessage() + "\n");
+            statusLabel.setText("Execution failed");
+        }
     }
 
-    appendOutput("> " + command + "\n");
+    // ========== 新增的方法：使用 SQLExecutor 的新功能 ==========
 
-    try {
-        if (command.equalsIgnoreCase("status")) {
-            // Handle status command
-            appendOutput("Connection Info: " + dbManager.getConnectionInfo() + "\n");
-            boolean success = dbManager.testConnection();
-            appendOutput(success ? "Connection test successful\n" : "Connection test failed\n");
-            statusLabel.setText("Status checked");
-        } else if (command.equalsIgnoreCase("test")) {
-            // Test connection
-            boolean success = dbManager.testConnection();
-            appendOutput(success ? "Connection test successful\n" : "Connection test failed\n");
-            statusLabel.setText("Test completed");
-        } else if (command.equalsIgnoreCase("SHOW_DATABASES")) {
-            // Show databases using metadata manager
-            QueryResult result = metadataManager.getDatabases();
-            displayResult(result);
-        } else if (command.equalsIgnoreCase("SHOW_TABLES")) {
-            // Show tables using metadata manager
-            QueryResult result = metadataManager.getTables();
-            displayResult(result);
-        } else if (command.equalsIgnoreCase("DESCRIBE_TABLE")) {
-            // Prompt user for table name
-            String tableName = JOptionPane.showInputDialog(this, "Enter table name:");
-            if (tableName != null && !tableName.trim().isEmpty()) {
-                QueryResult result = metadataManager.describeTable(tableName.trim());
-                displayResult(result);
+    /**
+     * 使用 SQLExecutor 的 getTables 方法获取表列表
+     */
+    private void handleGetTables() {
+        appendOutput("Getting table list via SQLExecutor...\n");
+        QueryResult result = sqlExecutor.getTables(dbManager.getConnection());
+        displayResult(result);
+        statusLabel.setText("Tables retrieved via SQLExecutor");
+    }
+
+    /**
+     * 使用 SQLExecutor 的 validateSQL 方法验证 SQL 语法
+     */
+    private void handleValidateSQL() {
+        String sql = JOptionPane.showInputDialog(this,
+                "Enter SQL to validate:",
+                "SQL Validation",
+                JOptionPane.QUESTION_MESSAGE);
+
+        if (sql != null && !sql.trim().isEmpty()) {
+            appendOutput("Validating SQL: " + sql + "\n");
+            QueryResult result = sqlExecutor.validateSQL(dbManager.getConnection(), sql);
+            if (result.isSuccess()) {
+                appendOutput("✓ SQL is valid: " + result.getMessage() + "\n");
+                statusLabel.setText("SQL validation successful");
+            } else {
+                appendOutput("✗ SQL validation failed: " + result.getMessage() + "\n");
+                statusLabel.setText("SQL validation failed");
             }
-        } else if (command.equalsIgnoreCase("DATABASE_INFO")) {
-            // Show database info
-            QueryResult result = metadataManager.getDatabaseInfo();
-            displayResult(result);
-        } else if (command.equalsIgnoreCase("TABLE_STATUS")) {
-            // Show table status
-            QueryResult result = metadataManager.getTableStatus();
-            displayResult(result);
-        } else if (command.equalsIgnoreCase("SHOW_HISTORY")) {
-            // Show command history
-            showHistory();
-        } else if (command.equalsIgnoreCase("CLEAR_HISTORY")) {
-            // Clear command history
-            historyManager.clear();
-            appendOutput("Command history cleared\n");
-            statusLabel.setText("History cleared");
-        } else if (command.equalsIgnoreCase("SHOW_RECENT")) {
-            // Show recent command history (last 10 items)
-            showRecentHistory(10);
-        } else if (command.equalsIgnoreCase("SEARCH_HISTORY")) {
-            // Prompt user for search term
-            String keyword = JOptionPane.showInputDialog(this, "Enter search keyword:");
-            if (keyword != null && !keyword.trim().isEmpty()) {
-                searchHistory(keyword.trim());
+        }
+    }
+
+    /**
+     * 使用 SQLExecutor 的 executePrepared 方法执行参数化查询
+     */
+    private void handlePreparedQuery() {
+        // 创建参数输入对话框
+        JPanel panel = new JPanel(new GridLayout(4, 2, 5, 5));
+
+        JTextField sqlField = new JTextField("SELECT * FROM users WHERE age > ? AND name LIKE ?");
+        JTextField ageField = new JTextField("18");
+        JTextField nameField = new JTextField("%%");
+        JCheckBox useParamsCheckbox = new JCheckBox("Use parameters", true);
+
+        panel.add(new JLabel("SQL with parameters:"));
+        panel.add(sqlField);
+        panel.add(new JLabel("Age parameter:"));
+        panel.add(ageField);
+        panel.add(new JLabel("Name pattern:"));
+        panel.add(nameField);
+        panel.add(new JLabel(""));
+        panel.add(useParamsCheckbox);
+
+        int result = JOptionPane.showConfirmDialog(this, panel,
+                "Prepared Query Parameters", JOptionPane.OK_CANCEL_OPTION);
+
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                String sql = sqlField.getText().trim();
+                List<Object> params = new ArrayList<>();
+
+                if (useParamsCheckbox.isSelected()) {
+                    if (!ageField.getText().trim().isEmpty()) {
+                        params.add(Integer.parseInt(ageField.getText().trim()));
+                    }
+                    if (!nameField.getText().trim().isEmpty()) {
+                        params.add(nameField.getText().trim());
+                    }
+                }
+
+                appendOutput("Executing prepared query: " + sql + "\n");
+                if (!params.isEmpty()) {
+                    appendOutput("Parameters: " + params + "\n");
+                }
+
+                QueryResult queryResult = sqlExecutor.executePrepared(dbManager.getConnection(), sql, params);
+                displayResult(queryResult);
+                statusLabel.setText("Prepared query executed");
+
+            } catch (NumberFormatException e) {
+                appendOutput("Error: Invalid number format in parameters\n");
+                statusLabel.setText("Parameter error");
+            } catch (Exception e) {
+                appendOutput("Error in prepared query: " + e.getMessage() + "\n");
+                statusLabel.setText("Execution failed");
             }
-        } else {
-            // Execute SQL
-            QueryResult result = sqlExecutor.execute(dbManager.getConnection(), command);
+        }
+    }
+
+    /**
+     * 使用 SQLExecutor 的 executeMultiple 方法执行批量 SQL
+     */
+    private void handleBatchExecute() {
+        JTextArea batchArea = new JTextArea(10, 50);
+        batchArea.setText("SHOW TABLES;\nSELECT NOW();\nSELECT 1 + 1;");
+        batchArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+
+        JScrollPane scrollPane = new JScrollPane(batchArea);
+
+        int result = JOptionPane.showConfirmDialog(this, scrollPane,
+                "Enter Batch SQL (separate statements with semicolons)",
+                JOptionPane.OK_CANCEL_OPTION);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String batchSQL = batchArea.getText().trim();
+            if (!batchSQL.isEmpty()) {
+                appendOutput("Executing batch SQL...\n");
+                appendOutput("Batch SQL:\n" + batchSQL + "\n");
+
+                List<QueryResult> results = sqlExecutor.executeMultiple(dbManager.getConnection(), batchSQL);
+
+                appendOutput("=== Batch Execution Results ===\n");
+                for (int i = 0; i < results.size(); i++) {
+                    QueryResult singleResult = results.get(i);
+                    appendOutput("Statement " + (i + 1) + ": " +
+                            (singleResult.isSuccess() ? "✓ " : "✗ ") +
+                            singleResult.getMessage() + "\n");
+
+                    // 如果有数据结果，显示表格
+                    if (singleResult.isSuccess() && singleResult.getData() != null && !singleResult.getData().isEmpty()) {
+                        appendOutput("Result data available for statement " + (i + 1) + "\n");
+                        // 显示最后一个有数据的语句结果
+                        if (i == results.size() - 1 ||
+                                (i < results.size() - 1 && results.get(i + 1).getData() == null)) {
+                            displayResult(singleResult);
+                        }
+                    }
+                }
+                statusLabel.setText("Batch execution completed - " + results.size() + " statements");
+            }
+        }
+    }
+
+    // ========== 原有的方法 ==========
+
+    private void handleStatusCommand() {
+        appendOutput("Connection Info: " + dbManager.getConnectionInfo() + "\n");
+        boolean success = dbManager.testConnection();
+        appendOutput(success ? "✓ Connection test successful\n" : "✗ Connection test failed\n");
+        statusLabel.setText("Status checked");
+    }
+
+    private void handleTestConnection() {
+        boolean success = dbManager.testConnection();
+        appendOutput(success ? "✓ Connection test successful\n" : "✗ Connection test failed\n");
+        statusLabel.setText("Test completed");
+    }
+
+    private void handleShowDatabases() {
+        QueryResult result = metadataManager.getDatabases();
+        displayResult(result);
+    }
+
+    private void handleShowTables() {
+        QueryResult result = metadataManager.getTables();
+        displayResult(result);
+    }
+
+    private void handleDescribeTable() {
+        String tableName = JOptionPane.showInputDialog(this, "Enter table name:");
+        if (tableName != null && !tableName.trim().isEmpty()) {
+            QueryResult result = metadataManager.describeTable(tableName.trim());
             displayResult(result);
         }
-    } catch (Exception e) {
-        appendOutput("Error: " + e.getMessage() + "\n");
-        statusLabel.setText("Execution failed");
-    }
-}
-    private void showRecentHistory(int count) {
-        List<String> recent = historyManager.getRecent(count);
-        if (recent.isEmpty()) {
-            appendOutput("No recent command history available\n");
-        } else {
-            appendOutput("=== Recent Command History (Last " + count + ") ===\n");
-            for (int i = 0; i < recent.size(); i++) {
-                appendOutput(String.format("%3d. %s\n", i + 1, recent.get(i)));
-            }
-            appendOutput("================================================\n");
-        }
-        statusLabel.setText("Showing recent history (" + recent.size() + " items)");
     }
 
-    private void searchHistory(String keyword) {
-        List<String> results = historyManager.search(keyword);
-        if (results.isEmpty()) {
-            appendOutput("No matching commands found for: " + keyword + "\n");
-        } else {
-            appendOutput("=== Search Results for '" + keyword + "' ===\n");
-            for (int i = 0; i < results.size(); i++) {
-                appendOutput(String.format("%3d. %s\n", i + 1, results.get(i)));
-            }
-            appendOutput("=========================================\n");
-        }
-        statusLabel.setText("Search completed (" + results.size() + " matches)");
+    private void handleDatabaseInfo() {
+        QueryResult result = metadataManager.getDatabaseInfo();
+        displayResult(result);
     }
 
-    private void showHistory() {
-        List<String> history = historyManager.getAll();
-        if (history.isEmpty()) {
-            appendOutput("No command history available\n");
-        } else {
-            appendOutput("=== Command History ===\n");
-            for (int i = 0; i < history.size(); i++) {
-                appendOutput(String.format("%3d. %s\n", i + 1, history.get(i)));
-            }
-            appendOutput("=======================\n");
-        }
-        statusLabel.setText("Showing history (" + history.size() + " items)");
+    private void handleTableStatus() {
+        QueryResult result = metadataManager.getTableStatus();
+        displayResult(result);
     }
 
+    private void handleSQLExecution(String sql) {
+        QueryResult result = sqlExecutor.execute(dbManager.getConnection(), sql);
+        displayResult(result);
+    }
 
     private void displayResult(QueryResult result) {
         if (result.isSuccess()) {
             if (result.getData() != null && !result.getData().isEmpty()) {
-                // Display table data
                 displayTableResult(result);
-                appendOutput("Query successful: " + result.getData().size() + " rows returned\n");
+                appendOutput("✓ Query successful: " + result.getData().size() + " rows returned\n");
             } else {
-                appendOutput("Success: " + result.getMessage() + "\n");
+                appendOutput("✓ Success: " + result.getMessage() + "\n");
             }
             statusLabel.setText("Execution successful");
         } else {
-            appendOutput("Error: " + result.getMessage() + "\n");
+            appendOutput("✗ Error: " + result.getMessage() + "\n");
             statusLabel.setText("Execution failed");
         }
     }
@@ -316,19 +438,51 @@ public class DBManagerGUI extends JFrame {
                         Object[] rowData = new Object[firstRow.size()];
                         int i = 0;
                         for (String column : firstRow.keySet()) {
-                            rowData[i++] = row.get(column);
+                            Object value = row.get(column);
+                            rowData[i++] = (value != null) ? value : "NULL";
                         }
                         tableModel.addRow(rowData);
                     }
+
+                    // Auto-resize columns after data is loaded
+                    autoResizeTableColumns();
                 }
             } catch (Exception e) {
                 // If table display fails, use text format
                 appendOutput("Using text format for results:\n");
                 try {
-                    TableFormatter.displayResult(result);
+                    String textResult = TableFormatter.formatAsText(result);
+                    appendOutput(textResult + "\n");
                 } catch (Exception ex) {
                     appendOutput("Failed to display results: " + ex.getMessage() + "\n");
                 }
+            }
+        });
+    }
+
+    private void autoResizeTableColumns() {
+        SwingUtilities.invokeLater(() -> {
+            JTable table = (JTable) ((JViewport) ((JScrollPane)
+                    ((JSplitPane) getContentPane().getComponent(0)).getRightComponent()).getComponent(0)).getView();
+
+            for (int column = 0; column < table.getColumnCount(); column++) {
+                TableColumn tableColumn = table.getColumnModel().getColumn(column);
+                int preferredWidth = tableColumn.getMinWidth();
+                int maxWidth = tableColumn.getMaxWidth();
+
+                for (int row = 0; row < table.getRowCount(); row++) {
+                    TableCellRenderer cellRenderer = table.getCellRenderer(row, column);
+                    Component c = table.prepareRenderer(cellRenderer, row, column);
+                    int width = c.getPreferredSize().width + table.getIntercellSpacing().width;
+                    preferredWidth = Math.max(preferredWidth, width);
+
+                    if (preferredWidth >= maxWidth) {
+                        preferredWidth = maxWidth;
+                        break;
+                    }
+                }
+
+                tableColumn.setPreferredWidth(preferredWidth);
             }
         });
     }
@@ -337,6 +491,26 @@ public class DBManagerGUI extends JFrame {
         SwingUtilities.invokeLater(() -> {
             outputArea.append(text);
             outputArea.setCaretPosition(outputArea.getDocument().getLength());
+        });
+    }
+
+    private static class ToolbarCommand {
+        private final String displayName;
+        private final String command;
+
+        public ToolbarCommand(String displayName, String command) {
+            this.displayName = displayName;
+            this.command = command;
+        }
+
+        public String getDisplayName() { return displayName; }
+        public String getCommand() { return command; }
+    }
+
+    public static void main(String[] args) {
+        // 简化版本：直接启动GUI，不使用外观设置
+        SwingUtilities.invokeLater(() -> {
+            new DBManagerGUI();
         });
     }
 }

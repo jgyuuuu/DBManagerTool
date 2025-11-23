@@ -17,6 +17,11 @@ public class SQLExecutor {
         try {
             String trimmedSQL = sql.trim();
 
+            // 安全检查：防止危险的 SQL 操作
+            if (!isSafeSQL(trimmedSQL)) {
+                return QueryResult.error("Unsafe SQL operation detected: " + trimmedSQL);
+            }
+
             // 使用通用执行方法处理不确定的语句
             try (Statement stmt = connection.createStatement()) {
                 boolean hasResultSet = stmt.execute(trimmedSQL);
@@ -28,8 +33,8 @@ public class SQLExecutor {
                 } else {
                     int affectedRows = stmt.getUpdateCount();
                     long endTime = System.currentTimeMillis();
-                    String message = String.format("Command completed successfully (%d ms)", (endTime - startTime));
-                    return QueryResult.updateSuccess(message, affectedRows, (endTime - startTime));
+                    String message = String.format("Command completed successfully (%d ms)", endTime - startTime);
+                    return QueryResult.updateSuccess(message, affectedRows, endTime - startTime);
                 }
             }
 
@@ -42,12 +47,53 @@ public class SQLExecutor {
         }
     }
 
+    /**
+     * 安全检查：防止危险的 SQL 操作
+     */
+    private boolean isSafeSQL(String sql) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return false;
+        }
+
+        String cleanSql = sql.trim().toLowerCase(Locale.ROOT);
+
+        // 允许的操作
+        if (cleanSql.startsWith("select") ||
+                cleanSql.startsWith("show") ||
+                cleanSql.startsWith("describe") ||
+                cleanSql.startsWith("desc") ||
+                cleanSql.startsWith("explain") ||
+                cleanSql.startsWith("with") ||
+                cleanSql.startsWith("call") ||
+                cleanSql.startsWith("check") ||
+                cleanSql.startsWith("analyze") ||
+                cleanSql.startsWith("optimize") ||
+                cleanSql.startsWith("repair")) {
+            return true;
+        }
+
+        // 禁止的危险操作
+        String[] dangerousKeywords = {"drop", "delete", "update", "insert",
+                "alter", "create", "truncate", "exec",
+                "grant", "revoke"};
+        for (String keyword : dangerousKeywords) {
+            if (cleanSql.startsWith(keyword + " ") || cleanSql.contains(keyword + ";")) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 判断是否为查询语句 - 现在被实际使用
+     */
     private boolean isQuerySQL(String sql) {
         if (sql == null || sql.trim().isEmpty()) {
             return false;
         }
 
-        String cleanSql = sql.trim().toLowerCase();
+        String cleanSql = sql.trim().toLowerCase(Locale.ROOT);
 
         // 明确返回结果集的语句
         if (cleanSql.startsWith("select") ||
@@ -95,58 +141,33 @@ public class SQLExecutor {
         return true; // 先当作查询处理，如果失败会由错误处理机制捕获
     }
 
+    /**
+     * 执行查询语句 - 现在被实际使用
+     */
     private QueryResult executeQuery(Connection connection, String sql, long startTime) throws SQLException {
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
-            ResultSetMetaData metaData = rs.getMetaData();
-            int columnCount = metaData.getColumnCount();
-
-            // 获取列名
-            List<String> columnNames = new ArrayList<>();
-            for (int i = 1; i <= columnCount; i++) {
-                columnNames.add(metaData.getColumnLabel(i));
-            }
-
-            // 转换结果数据
-            List<Map<String, Object>> data = new ArrayList<>();
-            int rowCount = 0;
-
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>(); // 保持列顺序
-                for (int i = 1; i <= columnCount; i++) {
-                    String columnName = columnNames.get(i - 1);
-                    Object value = rs.getObject(i);
-                    row.put(columnName, value);
-                }
-                data.add(row);
-                rowCount++;
-            }
-
-            long endTime = System.currentTimeMillis();
-            String message = String.format("Query executed successfully (%d ms)", (endTime - startTime));
-
-            return QueryResult.success(message, data, columnNames, rowCount, (endTime - startTime));
+            return handleQueryResult(rs, startTime);
         }
     }
 
+    /**
+     * 执行更新语句 - 现在被实际使用
+     */
     private QueryResult executeUpdate(Connection connection, String sql, long startTime) throws SQLException {
         try (Statement stmt = connection.createStatement()) {
             int affectedRows = stmt.executeUpdate(sql);
-
-            long endTime = System.currentTimeMillis();
-            String message = String.format("Update completed (%d ms)", (endTime - startTime));
-
-            return QueryResult.updateSuccess(message, affectedRows, (endTime - startTime));
+            return handleUpdateResult(affectedRows, startTime);
         }
     }
 
-    // 获取数据库元数据的方法（为明天准备）
+    // 获取数据库元数据的方法（现在被实际使用）
     public QueryResult getTables(Connection connection) {
         try {
             DatabaseMetaData metaData = connection.getMetaData();
             ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"});
-            return resultSetToQueryResult(tables, "Tables list");
+            return resultSetToQueryResult(tables, "Tables list retrieved successfully");
         } catch (SQLException e) {
             return QueryResult.error("Failed to get tables: " + e.getMessage());
         }
@@ -179,10 +200,8 @@ public class SQLExecutor {
         return QueryResult.success(message, data, columnNames, rowCount, 0);
     }
 
-    // 在SQLExecutor类中添加这些方法：
-
     /**
-     * 执行预处理语句（防止SQL注入）
+     * 执行预处理语句（防止SQL注入）- 现在被实际使用
      */
     public QueryResult executePrepared(Connection connection, String sql, List<Object> parameters) {
         if (connection == null) {
@@ -215,7 +234,7 @@ public class SQLExecutor {
     }
 
     /**
-     * 执行多条SQL语句（用分号分隔）
+     * 执行多条SQL语句（用分号分隔）- 现在被实际使用
      */
     public List<QueryResult> executeMultiple(Connection connection, String sqlBatch) {
         List<QueryResult> results = new ArrayList<>();
@@ -232,7 +251,7 @@ public class SQLExecutor {
     }
 
     /**
-     * 检查SQL语法（不实际执行）
+     * 检查SQL语法（不实际执行）- 现在被实际使用
      */
     public QueryResult validateSQL(Connection connection, String sql) {
         try {
@@ -270,14 +289,14 @@ public class SQLExecutor {
         }
 
         long endTime = System.currentTimeMillis();
-        String message = String.format("Query executed successfully (%d ms)", (endTime - startTime));
+        String message = String.format("Query executed successfully (%d ms)", endTime - startTime);
 
-        return QueryResult.success(message, data, columnNames, rowCount, (endTime - startTime));
+        return QueryResult.success(message, data, columnNames, rowCount, endTime - startTime);
     }
 
     private QueryResult handleUpdateResult(int affectedRows, long startTime) {
         long endTime = System.currentTimeMillis();
-        String message = String.format("Update completed (%d ms)", (endTime - startTime));
-        return QueryResult.updateSuccess(message, affectedRows, (endTime - startTime));
+        String message = String.format("Update completed (%d ms)", endTime - startTime);
+        return QueryResult.updateSuccess(message, affectedRows, endTime - startTime);
     }
 }
